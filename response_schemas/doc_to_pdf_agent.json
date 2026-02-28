@@ -1,0 +1,49 @@
+{
+  "agent_name": "Doc-to-PDF Agent",
+  "agent_id": "69a28b54e72641e0c6070b2c",
+  "description": "Accepts a documentation website URL, extracts page content, and generates two PDF versions: a clean faithful copy and a structured compliance report with headers, metadata, and timestamps",
+  "agent_type": "text",
+  "has_module_outputs": true,
+  "accessor": "json",
+  "response_fields": {
+    "source_url": {
+      "type": "string",
+      "description": "The documentation URL that was processed"
+    },
+    "document_title": {
+      "type": "string",
+      "description": "Title of the extracted documentation"
+    },
+    "section_count": {
+      "type": "number",
+      "description": "Number of sections extracted"
+    },
+    "word_count": {
+      "type": "number",
+      "description": "Approximate word count of extracted content"
+    },
+    "extraction_summary": {
+      "type": "string",
+      "description": "Brief summary of what was extracted"
+    },
+    "clean_copy_info": {
+      "type": "string",
+      "description": "Description of the clean copy PDF generated"
+    },
+    "compliance_report_info": {
+      "type": "string",
+      "description": "Description of the compliance report PDF generated"
+    }
+  },
+  "notes": "This agent returns JSON text in the response body AND generates PDF file outputs. The generated PDF files are available in module_outputs.artifact_files at the top level of the API response (not inside the JSON text). The response body contains metadata about the extraction; the actual PDFs are downloadable from the artifact_files URLs.",
+  "module_outputs_example": {
+    "artifact_files": [
+      {
+        "file_url": "https://example.com/clean_copy.pdf"
+      },
+      {
+        "file_url": "https://example.com/compliance_report.pdf"
+      }
+    ]
+  }
+}
