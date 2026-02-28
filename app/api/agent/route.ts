@@ -115,6 +115,13 @@ function normalizeResponse(parsed: any): NormalizedAgentResponse {
 }
 
 /**
+ * GET /api/agent — health check
+ */
+export async function GET() {
+  return NextResponse.json({ status: 'ok', configured: !!LYZR_API_KEY })
+}
+
+/**
  * POST /api/agent
  *
  * Two modes, both POST:
@@ -123,7 +130,19 @@ function normalizeResponse(parsed: any): NormalizedAgentResponse {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          response: { status: 'error', result: {}, message: 'Invalid JSON in request body' },
+          error: 'Invalid JSON in request body',
+        },
+        { status: 400 }
+      )
+    }
 
     if (!LYZR_API_KEY) {
       return NextResponse.json(
@@ -277,18 +296,52 @@ async function pollTask(task_id: string) {
   }
 
   // Task completed — envelope extraction + parseLLMJson + normalizeResponse
-  const rawText = JSON.stringify(task.response)
   let moduleOutputs: ModuleOutputs | undefined
-  let agentResponseRaw: any = rawText
+  let agentResponseRaw: any
+  let rawText = ''
 
   try {
-    const envelope = JSON.parse(rawText)
-    if (envelope && typeof envelope === 'object' && 'response' in envelope) {
-      moduleOutputs = envelope.module_outputs
-      agentResponseRaw = envelope.response
+    rawText = JSON.stringify(task.response ?? task)
+  } catch {
+    rawText = String(task.response ?? '')
+  }
+
+  // 1. Extract module_outputs from task level first (Lyzr puts them here for file_output agents)
+  if (task.module_outputs && typeof task.module_outputs === 'object') {
+    moduleOutputs = task.module_outputs
+  }
+
+  // 2. Try to extract from the response envelope as well
+  try {
+    const responseData = task.response
+    if (responseData && typeof responseData === 'object') {
+      // Check if response itself has a nested envelope with module_outputs
+      if ('module_outputs' in responseData && responseData.module_outputs) {
+        moduleOutputs = moduleOutputs || responseData.module_outputs
+      }
+      // If response has a nested 'response' key, unwrap the envelope
+      if ('response' in responseData) {
+        agentResponseRaw = responseData.response
+        if (!moduleOutputs && responseData.module_outputs) {
+          moduleOutputs = responseData.module_outputs
+        }
+      } else {
+        agentResponseRaw = responseData
+      }
+    } else if (typeof responseData === 'string') {
+      agentResponseRaw = responseData
+    } else {
+      agentResponseRaw = rawText
     }
   } catch {
-    // Not standard JSON envelope — parseLLMJson will handle it
+    agentResponseRaw = rawText
+  }
+
+  // 3. Also check for module_outputs inside artifact-style response structures
+  if (!moduleOutputs && task.result && typeof task.result === 'object') {
+    if (task.result.module_outputs) {
+      moduleOutputs = task.result.module_outputs
+    }
   }
 
   const parsed = parseLLMJson(agentResponseRaw)

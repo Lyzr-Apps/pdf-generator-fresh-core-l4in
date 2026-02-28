@@ -196,15 +196,26 @@ export default function Page() {
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       loadingIntervalRef.current = null
 
+      if (!response) {
+        setError('No response received from the server. Please check your connection and try again.')
+        return
+      }
+
       if (response.success) {
+        // Parse the response result — may be string or object
         let data = response?.response?.result
         if (typeof data === 'string') {
           try { data = JSON.parse(data) } catch { /* use as-is */ }
+        }
+        // Handle case where result is still a string after parse attempt
+        if (typeof data === 'string') {
+          data = { extraction_summary: data }
         }
 
         const parsed: ParsedData = typeof data === 'object' && data !== null ? data as ParsedData : {}
         setParsedData(parsed)
 
+        // Extract artifact files from module_outputs (top level of response)
         const artifactFiles = Array.isArray(response?.module_outputs?.artifact_files)
           ? response.module_outputs!.artifact_files
           : []
@@ -224,12 +235,16 @@ export default function Page() {
           return updated
         })
       } else {
-        setError(response?.error ?? 'Failed to generate PDFs. Please try again.')
+        const errorMsg = response?.error
+          || response?.response?.message
+          || 'Failed to generate PDFs. Please try again.'
+        setError(errorMsg)
       }
     } catch (err) {
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       loadingIntervalRef.current = null
-      setError('An unexpected error occurred. Please try again.')
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred.'
+      setError(`${msg} Please try again.`)
     } finally {
       setIsLoading(false)
       setActiveAgentId(null)
